@@ -570,6 +570,14 @@ bool Glasses::update_connection() {
 	if (_state.became_clear(_previous_update_state, GlassesState::CONNECTED)) {
 		stop_display();
 		on_glasses_dropped();
+		T5_Result result;
+		{
+			std::lock_guard lock(g_t5_exclusivity_group_1);
+			result = t5ReleaseGlasses(_glasses_handle);
+		}
+		if (result != T5_SUCCESS) {
+			LOG_T5_ERROR(result);
+		}
 	}
 	_previous_update_state.sync_from(_state);
 

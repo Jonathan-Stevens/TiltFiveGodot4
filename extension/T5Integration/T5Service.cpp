@@ -202,7 +202,27 @@ CotaskPtr T5Service::query_glasses_list() {
 				auto new_glasses = create_glasses(id);
 				if (new_glasses->allocate_handle(_context))
 					_glasses_list.emplace_back(std::move(new_glasses));
+			} else if (!(*found)->is_connected() && !(((*found)->get_current_state() & GlassesState::SUSTAIN_CONNECTION) == GlassesState::SUSTAIN_CONNECTION)) {
+				// We've seen this pair of glasses before.
+				// If it's in the middle of booting, leave it alone.
+				// Otherwise, we should remove any old entries for this pair of glasses
+				// and bootstrap it as normal.
+				_glasses_list.erase(found);
+				auto new_glasses = create_glasses(id);
+				if (new_glasses->allocate_handle(_context)) {
+					//*found = T5Integration::Glasses::Ptr(std::shared_ptr(std::move(new_glasses)));
+					std::_Vector_const_iterator begin(_glasses_list.begin());
+					auto index = std::distance(begin, found);
+					//std::replace(found, found + 1, *found, std::shared_ptr(std::move(new_glasses)));
+					_glasses_list[index] = T5Integration::Glasses::Ptr(std::shared_ptr(std::move(new_glasses)));
+				}
 			}
+
+			// I think we are missing logic here for glasses rediscovery.
+			// Basically, if the glasses have been seen before, found != _glasses_list.cend(),
+			// and we don't create a new pair of glasses or emplace_back, but we still want to
+			// make this new pair of glasses functional again.
+
 		}
 
 		co_await task_sleep(_poll_rate_for_monitoring);

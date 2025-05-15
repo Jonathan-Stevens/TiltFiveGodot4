@@ -86,10 +86,15 @@ func _on_service_event(event_num):
 
 func _on_glasses_event(glasses_id, event_num):
 	var xr_rig_state = id_to_state.get(glasses_id) as XRRigState
-	if not xr_rig_state:
+	var xr_rig_already_present : bool = is_instance_valid(xr_rig_state)
+	if not xr_rig_already_present:
 		xr_rig_state = XRRigState.new()
 		id_to_state[glasses_id] = xr_rig_state
 	match event_num:
+		TiltFiveXRInterface.E_GLASSES_ADDED:
+			if xr_rig_already_present:
+				id_to_state[glasses_id] = XRRigState.new()
+		
 		TiltFiveXRInterface.E_GLASSES_AVAILABLE:
 			xr_rig_state.available = true
 			_process_glasses()

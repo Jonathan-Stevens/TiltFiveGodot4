@@ -124,7 +124,8 @@ public partial class T5Interface : Node
 	void _OnGlassesEvent(String glassesID, int eventNum)
 	{
 		XRRigState xrRigState;
-		if(!glassesDictionary.TryGetValue(glassesID, out xrRigState))
+		bool xrRigAlreadyPresent = glassesDictionary.TryGetValue(glassesID, out xrRigState);
+		if(!xrRigAlreadyPresent)
 		{
 			xrRigState = new XRRigState();
 			glassesDictionary.Add(glassesID, xrRigState);
@@ -132,6 +133,14 @@ public partial class T5Interface : Node
 
 		switch ((GlassesEventType)eventNum)
 		{
+			case GlassesEventType.E_GLASSES_ADDED:
+			{
+				if(xrRigAlreadyPresent)
+				{
+					glassesDictionary[glassesID] = new();
+				}
+				break;
+			}
 			case GlassesEventType.E_GLASSES_AVAILABLE:
 			{ 
 				xrRigState.available = true;
