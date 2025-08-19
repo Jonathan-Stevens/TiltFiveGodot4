@@ -156,6 +156,16 @@ public:
     ////                 System Functions                 ////
     //////////////////////////////////////////////////////////
 
+    /// \brief Obtain the C handle for this client
+    ///
+    /// This is the lower level handle for use with the C interface. In almost all cases, you won't
+    /// need to use this. If in doubt, don't.
+    ///
+    /// \return The C handle
+    [[nodiscard]] auto getHandle() const -> T5_Context {
+        return mContext;
+    }
+
     /// \brief Enumerate glasses
     ///
     /// Glasses may not be ready to connect if they are in the process of booting (or rebooting).
@@ -419,6 +429,55 @@ public:
         }
     }
 
+    /// \brief Get projection properties for glasses
+    ///
+    /// \par Parameters
+    /// Each graphics API requires different properties when creating a projection matrix.
+    /// They each have their defaults, for which the properties are shown below. If you are not
+    /// using the defaults for your graphics API, ensure that you adjust the parameters used here.
+    ///
+    ///           ┌───────┬──────┬──────┬──────────────────────────────────┐
+    ///           │ L/RHS │ Near │ Far  │ Native Equivalent Function       │
+    /// ┌─────────┼───────┼──────┼──────┼──────────────────────────────────│
+    /// │ OpenGL  │  RHS→ │  -1  │  +1  │ glFrustum                        │
+    /// │ DirectX │ ←LHS  │   0  │  +1  │ D3DXMatrixPerspectiveOffCenterLH │
+    /// │ Vulkan  │  RHS→ │   0  │  +1  │                                  │
+    /// │ Metal   │  RHS→ │  -1  │  +1  │                                  │
+    /// └─────────┴───────┴──────┴──────┴──────────────────────────────────┘
+    /// Note: When referencing D3DXMatrixPerspectiveOffCenterLH, DirectX uses Row-major matrix
+    ///
+    /// \param[in]  glasses        - ::T5_Glasses returned by t5CreateGlasses().
+    /// \param[in]  handedness     - ::T5_CartesianCoordinateHandedness specifying handedness.
+    /// \param[in]  depthRange     - ::T5_DepthRange to use for matrix creation.
+    /// \param[in]  matrixOrder    - ::T5_MatrixOrder representing row or column major ordering.
+    /// \param[in]  nearPlane      - The near clipping plane in view space
+    /// \param[in]  farPlane       - The far clipping plane in view space
+    /// \param[in]  worldScale     - Conversion factor between world space and real-world units.
+    /// \return A T5_ProjectionInfo containing the requested projection info
+    auto getProjectionInfo(T5_CartesianCoordinateHandedness handedness,
+                           T5_DepthRange depthRange,
+                           T5_MatrixOrder matrixOrder,
+                           double nearPlane,
+                           double farPlane,
+                           double worldScale) -> Result<T5_ProjectionInfo> {
+
+        T5_ProjectionInfo projectionInfo;
+        T5_Result err = t5GetProjection(mGlasses,
+                                        handedness,
+                                        depthRange,
+                                        matrixOrder,
+                                        nearPlane,
+                                        farPlane,
+                                        worldScale,
+                                        &projectionInfo);
+
+        if (!err) {
+            return projectionInfo;
+        } else {
+            return static_cast<Error>(err);
+        }
+    }
+
     /// \brief Get a system-wide list of changed parameters
     ///
     /// This function doesn't return the values of the changed parameters, but vector of the
@@ -490,8 +549,8 @@ public:
     ///
     /// Although several operations can be performed without acquiring an exclusive lock on glasses,
     /// there are a few for which an exclusive lock is required. Primarily, the ability to get poses
-    /// (getLatestGlassesPose()) and send frames (sendFrame()). To reserve glasses for exclusive
-    /// use, use this function.
+    /// (getLatestGlassesPose() & getLatestGameboardPoses()) and send frames (sendFrame()).
+    /// To reserve glasses for exclusive use, use this function.
     ///
     /// Clients may request glasses that aren't fully available yet (e.g. a device that isn't fully
     /// booted, or needs to be rebooted to be compatible with the client). That is why there's a
@@ -518,9 +577,9 @@ public:
     /// \brief Ensure that reserved glasses are ready for exclusive operations.
     ///
     /// Ensure that reserved glasses are ready for exclusive operations, such as the ability to get
-    /// poses (getLatestGlassesPose()) and send frames (sendFrame()).  To reserve glasses for
-    /// exclusive use, see reserve(). This *must* be checked for success prior to exclusive
-    /// operations, otherwise those operations will fail.
+    /// poses (getLatestGlassesPose() & getLatestGameboardPoses()) and send frames (sendFrame()).
+    /// To reserve glasses for exclusive use, see reserve(). This *must* be checked for success
+    /// prior to exclusive operations, otherwise those operations will fail.
     ///
     /// In normal operation, this will return successfully or contain the error
     /// tiltfive::Error::kTryAgain.  This should be called until success or an different error is
@@ -565,6 +624,21 @@ public:
 
         if (!err) {
             return pose;
+        } else {
+            return static_cast<Error>(err);
+        }
+    }
+
+    /// \brief Get the latest set of gameboard poses for this glasses
+    ///
+    /// \return ::T5_GameboardPoses representing the most recent gameboard poses.
+    auto getLatestGameboardPoses() -> Result<std::vector<T5_GameboardPose>> {
+        uint16_t gameboardCount = 1;
+        std::vector<T5_GameboardPose> gameboardPoses(gameboardCount);
+        T5_Result err = t5GetGameboardPoses(mGlasses, gameboardPoses.data(), &gameboardCount);
+
+        if (!err) {
+            return gameboardPoses;
         } else {
             return static_cast<Error>(err);
         }
@@ -625,6 +699,19 @@ public:
     /// service.
     auto cancelCamImageBuffer(uint8_t* buffer) -> Result<void> {
         T5_Result err = t5CancelCamImageBuffer(mGlasses, buffer);
+        if (!err) {
+            return kSuccess;
+        } else {
+            return static_cast<Error>(err);
+        }
+    }
+
+    /// Submit a pixel coordinate to have the dewarped image location calculated
+    //
+    /// \param[in, out] pixelCoordinate - Container object containing the pixel coordinate to be
+    /// dewarped
+    auto getDewarpedPixelCoordinate(T5_PixelDewarp* pixelCoordinate) -> Result<void> {
+        T5_Result err = t5GetDewarpedPixelCoordinate(mGlasses, pixelCoordinate);
         if (!err) {
             return kSuccess;
         } else {
@@ -1469,13 +1556,13 @@ inline std::ostream& operator<<(std::ostream& os, const T5_WandReport& instance)
     }
 
     if (instance.poseValid) {
-        os << "[P: (" << std::right << std::fixed << std::setw(10) << instance.posGrip_GBD.x << ","
-           << std::right << std::fixed << std::setw(10) << instance.posGrip_GBD.y << ","
-           << std::right << std::fixed << std::setw(10) << instance.posGrip_GBD.z << ") ("
-           << std::right << std::fixed << std::setw(10) << instance.rotToWND_GBD.w << ","
-           << std::right << std::fixed << std::setw(10) << instance.rotToWND_GBD.x << ","
-           << std::right << std::fixed << std::setw(10) << instance.rotToWND_GBD.y << ","
-           << std::right << std::fixed << std::setw(10) << instance.rotToWND_GBD.z << ")"
+        os << "[P: (" << std::right << std::fixed << std::setw(10) << instance.posGrip_STAGE.x
+           << "," << std::right << std::fixed << std::setw(10) << instance.posGrip_STAGE.y << ","
+           << std::right << std::fixed << std::setw(10) << instance.posGrip_STAGE.z << ") ("
+           << std::right << std::fixed << std::setw(10) << instance.rotToWND_STAGE.w << ","
+           << std::right << std::fixed << std::setw(10) << instance.rotToWND_STAGE.x << ","
+           << std::right << std::fixed << std::setw(10) << instance.rotToWND_STAGE.y << ","
+           << std::right << std::fixed << std::setw(10) << instance.rotToWND_STAGE.z << ")"
            << "]";
     }
 
@@ -1508,13 +1595,51 @@ inline std::ostream& operator<<(std::ostream& os, const T5_GlassesPose& instance
     }
 
     os << "[" << instance.timestampNanos << "| " << gameboardType << " (" << std::right
-       << std::fixed << std::setw(10) << instance.posGLS_GBD.x << "," << std::right << std::fixed
-       << std::setw(10) << instance.posGLS_GBD.y << "," << std::right << std::fixed << std::setw(10)
-       << instance.posGLS_GBD.z << ") (" << std::right << std::fixed << std::setw(10)
-       << instance.rotToGLS_GBD.w << "," << std::right << std::fixed << std::setw(10)
-       << instance.rotToGLS_GBD.x << "," << std::right << std::fixed << std::setw(10)
-       << instance.rotToGLS_GBD.y << "," << std::right << std::fixed << std::setw(10)
-       << instance.rotToGLS_GBD.z << ")"
+       << std::fixed << std::setw(10) << instance.posGLS_STAGE.x << "," << std::right << std::fixed
+       << std::setw(10) << instance.posGLS_STAGE.y << "," << std::right << std::fixed
+       << std::setw(10) << instance.posGLS_STAGE.z << ") (" << std::right << std::fixed
+       << std::setw(10) << instance.rotToGLS_STAGE.w << "," << std::right << std::fixed
+       << std::setw(10) << instance.rotToGLS_STAGE.x << "," << std::right << std::fixed
+       << std::setw(10) << instance.rotToGLS_STAGE.y << "," << std::right << std::fixed
+       << std::setw(10) << instance.rotToGLS_STAGE.z << ")"
+       << "]";
+
+    return os;
+}
+
+/// \brief Support for writing ::T5_GameboardPoses to an std::ostream
+/// \ingroup ostreamFormatters
+inline std::ostream& operator<<(std::ostream& os, const T5_GameboardPose& instance) {
+    std::string primaryGameboardType;
+    switch (instance.gameboardType) {
+        case kT5_GameboardType_None:
+            primaryGameboardType = "None";
+            break;
+        case kT5_GameboardType_LE:
+            primaryGameboardType = "LE";
+            break;
+        case kT5_GameboardType_XE:
+            primaryGameboardType = "XE";
+            break;
+        case kT5_GameboardType_XE_Raised:
+            primaryGameboardType = "XE (Raised)";
+            break;
+        default:
+            // Shouldn't happen unless there's some bad casting going on elsewhere.
+            primaryGameboardType = std::string("[Invalid T5_GameboardType : ") +
+                                   std::to_string(static_cast<int>(instance.gameboardType)) +
+                                   std::string("]");
+            break;
+    }
+
+    os << "[" << instance.timestampNanos << "| " << primaryGameboardType << " (" << std::right
+       << std::fixed << std::setw(10) << instance.posBOARD_STAGE.x << "," << std::right
+       << std::fixed << std::setw(10) << instance.posBOARD_STAGE.y << "," << std::right
+       << std::fixed << std::setw(10) << instance.posBOARD_STAGE.z << ") (" << std::right
+       << std::fixed << std::setw(10) << instance.rotToBOARD_STAGE.w << "," << std::right
+       << std::fixed << std::setw(10) << instance.rotToBOARD_STAGE.x << "," << std::right
+       << std::fixed << std::setw(10) << instance.rotToBOARD_STAGE.y << "," << std::right
+       << std::fixed << std::setw(10) << instance.rotToBOARD_STAGE.z << ")"
        << "]";
 
     return os;

@@ -109,9 +109,6 @@ T5_EXPORT T5_Result t5CreateContext(T5_Context* context,
 /// Exclusivity group 1 - Functions in this group must not be called concurrently from different
 /// threads.
 ///
-/// Attempting to use a ::T5_Context after it has been destroyed will result in a
-/// ::T5_ERROR_NO_CONTEXT error.
-///
 /// \param[in, out]  context - ::T5_Context returned by t5CreateContext(). Invalidated on return.
 T5_EXPORT void t5DestroyContext(T5_Context* context);
 
@@ -331,7 +328,7 @@ T5_EXPORT T5_Result t5GetSystemUtf8Param(T5_Context context,
 /// \param[in]  context  - ::T5_Context returned by t5CreateContext().
 /// \param[out] buffer   - ::T5_ParamSys buffer to receive list of change parameters.
 /// \param[in,out] count - <b>On Call</b>: Size of buffer in elements.<br/>&nbsp;
-///                        <b>On Return</b>: Number of changed parameters in butter.
+///                        <b>On Return</b>: Number of changed parameters in buffer.
 ///
 /// \retval ::T5_SUCCESS                     Changed parameter list written to buffer.
 /// \retval ::T5_ERROR_INVALID_ARGS          Nullptr was supplied for `buffer`.
@@ -375,8 +372,8 @@ T5_EXPORT T5_Result t5GetGameboardSize(T5_Context context,
 ///
 /// Although several operations can be performed without acquiring an exclusive lock on glasses,
 /// there are a few for which an exclusive lock is required. Primarily, the ability to get poses
-/// (t5GetGlassesPose()) and send frames (t5SendFrameToGlasses()). To reserve glasses for
-/// exclusive use, use this function.
+/// (t5GetGlassesPose() & t5GetGameboardPoses()) and send frames (t5SendFrameToGlasses()).
+/// To reserve glasses for exclusive use, use this function.
 ///
 /// Clients may request glasses that aren't fully available yet (e.g. a device that isn't fully
 /// booted, or needs to be rebooted to be compatible with the client). That is why there's a
@@ -428,9 +425,9 @@ T5_EXPORT T5_Result t5SetGlassesDisplayName(T5_Glasses glasses, const char* disp
 /// \ingroup glassesStateFns
 ///
 /// Ensure that reserved glasses are ready for exclusive operations, such as the ability to get
-/// poses (t5GetGlassesPose()) and send frames (t5SendFrameToGlasses()).  To reserve glasses for
-/// exclusive use t5ReserveGlasses() .  This *must* be checked for success prior to exclusive
-/// operations, otherwise those operations will fail.
+/// poses (t5GetGlassesPose() & t5GetGameboardPoses()) and send frames (t5SendFrameToGlasses()).
+/// To reserve glasses for exclusive use t5ReserveGlasses(). This *must* be checked for success
+/// prior to exclusive operations, otherwise those operations will fail.
 ///
 /// In normal operation, this will return either ::T5_SUCCESS or ::T5_ERROR_TRY_AGAIN .  This
 /// should be called until success or an different error is seen.
@@ -534,11 +531,42 @@ T5_EXPORT T5_Result t5GetGlassesIdentifier(T5_Glasses glasses, char* buffer, siz
 /// \retval ::T5_ERROR_NO_CONTEXT    `glasses` is invalid.
 /// \retval ::T5_ERROR_NOT_CONNECTED Glasses aren't exclusively connected for this client.
 ///                                  Use t5ReserveGlasses() and t5EnsureGlassesReady() first.
-/// \retval ::T5_ERROR_TRY_AGAIN     Pose wasn't been received from glasses yet.
+/// \retval ::T5_ERROR_TRY_AGAIN     Pose hasn't been received from glasses yet.
 /// \retval ::T5_ERROR_INTERNAL      Internal error - not correctable.
 T5_EXPORT T5_Result t5GetGlassesPose(T5_Glasses glasses,
                                      T5_GlassesPoseUsage usage,
                                      T5_GlassesPose* pose);
+
+/// \brief Get the latest set of gameboard poses
+/// \ingroup c_exclusive_functions
+///
+/// \par Exclusive Connection
+/// Requires an exclusive connection - established with t5ReserveGlasses() and
+/// t5EnsureGlassesReady().
+///
+/// \par Threading
+/// Exclusivity group 1 - Functions in this group must not be called concurrently from different
+/// threads.
+///
+/// \param[in]  glasses  - ::T5_Glasses returned by t5CreateGlasses().
+/// \param[out] buffer   - ::T5_GameboardPose buffer to receive list of gameboard poses.
+/// \param[in,out] count - <b>On Call</b>: Size of buffer in elements.<br/>&nbsp;
+///                        <b>On Return</b>: Number of available gameboard poses. If that number
+///                        is greater than the size of the buffer, the caller can assume the buffer
+///                        is full and should resize the buffer on subsequent calls to accomodate
+///                        all the available gameboards.
+///
+/// \retval ::T5_SUCCESS             Pose written to `pose`.
+/// \retval ::T5_ERROR_INVALID_ARGS  Nullptr was supplied for `pose`.
+/// \retval ::T5_ERROR_NO_CONTEXT    `glasses` is invalid.
+/// \retval ::T5_ERROR_NOT_CONNECTED Glasses aren't exclusively connected for this client.
+///                                  Use t5ReserveGlasses() and t5EnsureGlassesReady() first.
+/// \retval ::T5_ERROR_TRY_AGAIN     Pose wasn't been received from glasses yet.
+/// \retval ::T5_ERROR_INTERNAL      Internal error - not correctable.
+/// \retval ::T5_ERROR_OVERFLOW      Buffer too small to contain parameter list.
+T5_EXPORT T5_Result t5GetGameboardPoses(T5_Glasses glasses,
+                                        T5_GameboardPose* buffer,
+                                        uint16_t* count);
 
 /// \brief Initialize the graphics context to enable sending rendered frames to the glasses.
 /// \ingroup c_exclusive_functions
@@ -668,6 +696,28 @@ T5_EXPORT T5_Result t5SubmitEmptyCamImageBuffer(T5_Glasses glasses, T5_CamImage*
 /// \retval ::T5_ERROR_INTERNAL      Internal error - not correctable.
 T5_EXPORT T5_Result t5CancelCamImageBuffer(T5_Glasses glasses, uint8_t* buffer);
 
+/// Submit a 2D image coordinate to be dewarped using a specific camera
+//
+/// \par Exclusive Connection
+/// Requires an exclusive connection - established with makeExclusive().
+///
+/// \par Threading
+/// Exclusivity group 1 - Functions in this group must not be called simultaneously
+/// from different threads.
+///
+/// \param[in]  glasses - ::T5_Glasses returned by T5ApiSys::createGlasses().
+/// \param[in,out]  pixelCoordinate  - <b>On Call</b>: Contains the pixel coordinate to be dewarped
+///                             <b>On Return</b>: Contains both the original coordinate location and
+///                             the dewarped coordinate location.
+///
+/// \retval ::T5_SUCCESS             Buffer is no longer in use and is available for freeing
+/// \retval ::T5_ERROR_NO_CONTEXT    `glasses` is invalid.
+/// \retval ::T5_ERROR_NOT_CONNECTED Glasses aren't exclusively connected for this client.
+///                                  Use makeExclusive() first.
+/// \retval ::T5_ERROR_INTERNAL      Internal error - not correctable.
+T5_EXPORT T5_Result t5GetDewarpedPixelCoordinate(T5_Glasses glasses,
+                                                 T5_PixelDewarp* pixelCoordinate);
+
 /// \brief Send a frame to display on the glasses
 /// \ingroup c_exclusive_functions
 ///
@@ -684,7 +734,8 @@ T5_EXPORT T5_Result t5CancelCamImageBuffer(T5_Glasses glasses, uint8_t* buffer);
 /// t5EnsureGlassesReady().
 ///
 /// \par Graphics Context
-/// Requires a graphics context - initialized with t5InitGraphicsContext()
+/// Requires a graphics context - initialized with t5InitGlassesGraphicsContext().
+/// Additionally, if using OpenGL, the graphics context must be current.
 //
 /// \par Threading
 /// Exclusivity group 3 & Graphic thread only - Functions in this group must not be called
@@ -705,7 +756,7 @@ T5_EXPORT T5_Result t5CancelCamImageBuffer(T5_Glasses glasses, uint8_t* buffer);
 ///                                           t5EnsureGlassesReady() first.
 /// \retval ::T5_ERROR_INVALID_GFX_CONTEXT    Graphics context is invalid. Check that
 ///                                           graphicsContext was correct when
-///                                           t5InitGraphicsContext() was called.
+///                                           t5InitGlassesGraphicsContext() was called.
 /// \retval ::T5_ERROR_GFX_CONTEXT_INIT_FAIL  Failed to initialize graphics context.
 ///                                           Exact meaning depends on current graphics API.
 /// \retval ::T5_ERROR_NO_CONTEXT             `glasses` is invalid.
@@ -864,12 +915,13 @@ T5_EXPORT T5_Result t5GetGlassesFloatParam(T5_Glasses glasses,
 /// \retval ::T5_ERROR_NO_SERVICE         Service is unavailable.
 /// \retval ::T5_ERROR_NO_CONTEXT         `context` is invalid.
 /// \retval ::T5_ERROR_SETTING_WRONG_TYPE The requested parameter is not a UTF-8 string value.
+/// \retval ::T5_ERROR_OVERFLOW           The provided buffer was insufficient to store the
+///                                       UTF-8 string value.
 ///
 /// The following are internal errors that should be discarded and/or logged:
 /// \retval ::T5_ERROR_SETTING_UNKNOWN    Internal (Not correctable): Setting is unknown.
 /// \retval ::T5_ERROR_INTERNAL           Internal (Not correctable): Generic error.
 /// \retval ::T5_ERROR_MISC_REMOTE        Internal (Not correctable): Generic service error.
-/// \retval ::T5_ERROR_OVERFLOW           Internal (Not correctable): Buffer overflow.
 T5_EXPORT T5_Result t5GetGlassesUtf8Param(T5_Glasses glasses,
                                           T5_WandHandle wand,
                                           T5_ParamGlasses param,
@@ -891,7 +943,7 @@ T5_EXPORT T5_Result t5GetGlassesUtf8Param(T5_Glasses glasses,
 /// \param[in]     glasses - ::T5_Glasses returned by t5CreateGlasses().
 /// \param[out]    buffer  - ::T5_ParamGlasses buffer to receive list of parameters.
 /// \param[in,out] count   - <b>On Call</b>: Size of buffer in elements.<br/>&nbsp;
-///                          <b>On Return</b>: Number of changed parameters in butter.
+///                          <b>On Return</b>: Number of changed parameters in buffer.
 ///
 /// \retval ::T5_SUCCESS            Changed parameter list written to buffer.
 /// \retval ::T5_ERROR_INVALID_ARGS Nullptr was supplied for `buffer`.

@@ -43,11 +43,50 @@
 /// \brief The minimum height required for camera image buffers
 #define T5_MIN_CAM_IMAGE_BUFFER_HEIGHT (600)
 
+/// \brief The maximum number of gameboards that will be reported by t5GetGameboardPoses
+#define T5_MAX_GAMEBOARD_POSES (1)
+
 /// \brief 2D vector
 typedef struct {
     float x;
     float y;
 } T5_Vec2;
+
+/// \brief An integer cartesian offset
+typedef struct {
+    uint32_t x;
+    uint32_t y;
+} T5_Offset;
+
+/// \brief An integer width and height
+typedef struct {
+    uint32_t width;
+    uint32_t height;
+} T5_Extent;
+
+/// \brief A rectangle in integer cartesian coordinates
+typedef struct {
+    T5_Offset offset;
+    T5_Extent extent;
+} T5_Rect;
+
+/// \brief An integer cartesian offset
+typedef struct {
+    float x;
+    float y;
+} T5_Offsetf;
+
+/// \brief An integer width and height
+typedef struct {
+    float width;
+    float height;
+} T5_Extentf;
+
+/// \brief A rectangle in floating point cartesian coordinates
+typedef struct {
+    T5_Offsetf offset;
+    T5_Extentf extent;
+} T5_Rectf;
 
 /// \brief 3D vector
 typedef struct {
@@ -116,8 +155,34 @@ typedef enum {
 
     /// \brief Vulkan
     kT5_GraphicsApi_Vulkan = 4,
+
+    /// \brief Direct3D 12 (Windows Only)
+    kT5_GraphicsApi_D3D12 = 5,
+
+    /// When using the T5_TextureInfo formats below, The `vci`, `isUpsideDown`,
+    /// `isSrgb`, `texWidth_PIX`, `texHeight_PIX` fields of T5_FrameInfo are ignored.
+    /// The leftTexHandle and rightTexHandle fields of T5_FrameInfo must point to
+    /// valid T5_TextureInfo structs.
+
+    /// \brief OpenGL (With T5_TextureInfo textures)
+    ///
+    /// T5_GraphicsContextGL is unused.
+    kT5_GraphicsApi_GL_TI = 12,
+
+    /// \brief Direct3D 11 (With T5_TextureInfo textures) (Windows Only)
+    kT5_GraphicsApi_D3D11_TI = 13,
+
+    /// \brief Vulkan (With T5_TextureInfo textures)
+    ///
+    /// The `textureMode` field of T5_GraphicsContextVulkan is unused.
+    kT5_GraphicsApi_Vulkan_TI = 14,
+
+    /// \brief Direct3D 12 (With T5_TextureInfo textures) (Windows Only)
+    kT5_GraphicsApi_D3D12_TI = 15,
 } T5_GraphicsApi;
 
+/// \brief Used by ::T5_GraphicsContextGL to specify interpretation of texture handles
+/// Note that this is **not** used by ::kT5_GraphicsApi_GL_TI
 typedef enum {
     /// \brief Treat ::T5_FrameInfo.leftTexHandle and ::T5_FrameInfo.rightTexHandle as a pair of
     /// GL_TEXTURE_2D.
@@ -131,6 +196,8 @@ typedef enum {
     kT5_GraphicsApi_GL_TextureMode_Array = 2,
 } T5_GraphicsApi_GL_TextureMode;
 
+/// \brief Context for use with ::kT5_GraphicsApi_GL
+/// Note that this is **not** used by ::kT5_GraphicsApi_GL_TI
 typedef struct {
     /// \brief Specify the interpretation of the texture handles in ::T5_FrameInfo
     T5_GraphicsApi_GL_TextureMode textureMode;
@@ -142,6 +209,8 @@ typedef struct {
     uint32_t rightEyeArrayIndex;
 } T5_GraphicsContextGL;
 
+/// \brief Used by ::T5_GraphicsApi_Vulkan_TextureMode to specify interpretation of texture handles
+/// Note that this is **not** used by ::kT5_GraphicsApi_Vulkan_TI
 typedef enum {
     /// \brief Treat ::T5_FrameInfo.leftTexHandle and ::T5_FrameInfo.rightTexHandle as a pair of
     /// pointers to VkImage handles.
@@ -153,16 +222,16 @@ typedef enum {
 } T5_GraphicsApi_Vulkan_TextureMode;
 
 typedef struct {
-    /// \brief A pointer to a VkInstance
+    /// \brief VkInstance handle
     void* instance;
 
-    /// \brief A pointer to a VkPhysicalDevice
+    /// \brief VkPhysicalDevice handle
     void* physicalDevice;
 
-    /// \brief A pointer to a VkDevice
+    /// \brief VkDevice handle
     void* device;
 
-    /// \brief A pointer to a VkQueue
+    /// \brief VkQueue handle
     ///
     /// Requirements:
     ///  * Queue family must support VK_QUEUE_COMPUTE_BIT
@@ -172,8 +241,17 @@ typedef struct {
     uint32_t queueFamilyIndex;
 
     /// \brief Specify the interpretation of the texture handles in ::T5_FrameInfo
+    /// Note that this is **not** used by ::kT5_GraphicsApi_Vulkan_TI
     T5_GraphicsApi_Vulkan_TextureMode textureMode;
 } T5_GraphicsContextVulkan;
+
+typedef struct {
+    /// \brief A pointer to a ID3D12Device
+    void* device;
+
+    /// \brief A pointer to a ID3D12CommandQueue
+    void* queue;
+} T5_GraphicsContextD3D12;
 
 /// \brief Possible gameboard types
 typedef enum {
@@ -267,31 +345,68 @@ typedef enum {
 /// \brief Glasses pose information to be retrieved with t5GetGlassesPose()
 ///
 /// The pose describes the relationship between two reference frames: one defined in terms of the
-/// glasses, and the other in terms of the gameboard. Both reference frames are right-handed. The
+/// glasses, and the other in terms of the stage. Both reference frames are right-handed. The
 /// glasses reference frame, abbreviated as GLS, has its origin at the midpoint between the
 /// effective optical position of the projectors. It is oriented such that +X points to the right,
-/// +Y points up, and +Z points backward for someone wearing the glasses. The gameboard reference
-/// frame, abbreviated GBD, is oriented such that +X points to the right, +Y points forward, and +Z
-/// points up from the perspective of a person facing the gameboard on a table from the side of the
-/// gameboard with the T5 logo. The origin of the gameboard reference frame is located at the point
-/// equidistant from the three gameboard sides nearest to the T5 logo (i.e. the side on which the
-/// logo appears and the two adjacent sides). This places the gameboard origin in the center of the
-/// square LE gameboard, and off-center along the longer dimension of the rectangular XE gameboard.
+/// +Y points up, and +Z points backward for someone wearing the glasses. The STAGE reference
+/// is oriented such that +X points to the right, +Y points forward, and +Z points up with respect
+/// to gravity. The origin of the stage reference frame is located gravitationally coplanar with
+/// the lowest corner of the given gameboard and below the point equidistant from the three
+/// gameboard sides nearest to the T5 logo (i.e. the side on which the logo appears and the two
+/// adjacent sides). This places the stage origin below the center of the square LE gameboard,
+/// and off-center along the longer dimension of the rectangular XE gameboard.
 typedef struct {
     /// \brief The timestamp of the pose.
     uint64_t timestampNanos;
 
-    /// \brief The position of the origin of the GLS (glasses) frame relative to the GBD (gameboard)
+    /// \brief The position of the origin of the GLS (glasses) frame relative to the STAGE
     /// frame.
-    T5_Vec3 posGLS_GBD;
+    T5_Vec3 posGLS_STAGE;
 
-    /// \brief The rotation that transforms points in the GBD (gameboard) frame orientation to the
+    /// \brief The rotation that transforms points in the STAGE frame orientation to the
     /// GLS (glasses) frame orientation.
-    T5_Quat rotToGLS_GBD;
+    T5_Quat rotToGLS_STAGE;
 
     /// \brief The type of gameboard visible for this pose
     T5_GameboardType gameboardType;
 } T5_GlassesPose;
+
+/// \brief Gameboard pose information to be retrieved by enumerating the output of
+/// t5GetGameboardPoses()
+///
+/// The pose describes the relationship between two reference frames: one defined in terms of the
+/// stage, and the other in terms of the gameboard. Both reference frames are right-handed.
+/// The STAGE reference frame is oriented such that, when standing on the side of the physical
+/// gameboard with the T5 logo, +X points to the right, +Y points forward, and +Z points
+/// gravitationally up. The origin of the STAGE reference frame is located at the
+/// point equidistant from the three gameboard sides nearest to the T5 logo (i.e. the side on which
+/// the logo appears and the two adjacent sides). This places the gameboard origin in the center of
+/// the square LE gameboard, and off-center along the longer dimension of the rectangular XE
+/// gameboard. The gameboard reference frame, BOARD, is oriented such that +X points to the right,
+/// +Y points forward, and +Z points normal to and away from the reflective plane of the gameboard.
+/// The origin of BOARD space is located at the point equidistant from the three gameboard sides
+/// nearest to the T5 logo (i.e. the side on which the logo appears and the two adjacent sides).
+/// The BOARD space is identical to STAGE space when the physical gameboard is flat wrt gravity.
+/// When the physical gameboard is tilted up at an angle, STAGE space z remains gravity aligned
+/// where BOARD space z remains aligned with the normal vector to the reflective gameboard plane.
+typedef struct {
+    /// \brief The timestamp of the pose.
+    uint64_t timestampNanos;
+
+    /// \brief The position of the origin of the BOARD (gameboard) frame relative to the STAGE
+    /// frame.
+    T5_Vec3 posBOARD_STAGE;
+
+    /// \brief The rotation that transforms points in the STAGE frame orientation to the
+    /// BOARD (gameboard) frame orientation.
+    T5_Quat rotToBOARD_STAGE;
+
+    /// \brief The type of gameboard represented by this pose
+    T5_GameboardType gameboardType;
+
+    /// \brief The id of this gameboard pose
+    uint64_t id;
+} T5_GameboardPose;
 
 /// \brief Camera stream configuration
 typedef struct {
@@ -308,14 +423,14 @@ typedef struct {
     ///
     /// The meaning of the handle will depend on the current graphics API.
     ///
-    /// \see \ref aboutGraphicsApi for further details.
+    /// \see aboutGraphicsApi for further details.
     void* leftTexHandle;
 
     /// \brief Texture handle for the right image.
     ///
     /// The meaning of the handle will depend on the current graphics API.
     ///
-    /// \see \ref aboutGraphicsApi for further details.
+    /// \see aboutGraphicsApi for further details.
     void* rightTexHandle;
 
     /// \brief Width of the textures pointed to by leftTexHandle and rightTexHandle.
@@ -338,20 +453,61 @@ typedef struct {
         float height_VCI;
     } vci;
 
-    /// \brief The rotation from GBD to VC, the virtual camera reference frame for the left eye.
-    T5_Quat rotToLVC_GBD;
+    /// \brief The rotation from STAGE to VC, the virtual camera reference frame for the left eye.
+    T5_Quat rotToLVC_STAGE;
 
-    /// \brief The position of VC, the virtual camera reference frame, relative to GBD for the left
-    /// eye.
-    T5_Vec3 posLVC_GBD;
+    /// \brief The position of VC, the virtual camera reference frame, relative to STAGE for the
+    /// left eye.
+    T5_Vec3 posLVC_STAGE;
 
-    /// \brief The rotation from GBD to VC, the virtual camera reference frame for the right eye
-    T5_Quat rotToRVC_GBD;
+    /// \brief The rotation from STAGE to VC, the virtual camera reference frame for the right eye
+    T5_Quat rotToRVC_STAGE;
 
-    /// \brief The position of VC, the virtual camera reference frame, relative to GBD for the right
-    /// eye.
-    T5_Vec3 posRVC_GBD;
+    /// \brief The position of VC, the virtual camera reference frame, relative to STAGE for the
+    /// right eye.
+    T5_Vec3 posRVC_STAGE;
 } T5_FrameInfo;
+
+typedef struct {
+    struct {
+        /// \brief Texture handle.
+        ///
+        /// The meaning of the handle will depend on the current graphics API.
+        ///
+        /// \see aboutGraphicsApi for further details.
+        void* texture;
+
+        /// \brief The dimensions of the texture
+        ///
+        /// This may not be the same as the actual displayed image as
+        /// the subImage struct defines which part of the image is used.
+        T5_Extent dimensions;
+
+        /// \brief The array size of array based textures
+        uint16_t arraySize;
+    } texture;
+
+    struct {
+        /// \brief A rectangle defining which part of the texture is used.
+        ///
+        /// This must be specified even if the full image is used.
+        T5_Rect rect;
+
+        /// \brief For array textures, the index of the array to use.
+        ///
+        /// Ignored for non-array textures
+        uint16_t arrayIndex;
+    } subImage;
+
+    /// \brief The graphics API specific format used to create this texture
+    ///
+    /// E.g. VK_FORMAT_R8G8B8A8_SRGB, GL_SRGB8_ALPHA8, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+    /// This is always a concrete format (IE Not DXGI_FORMAT_R8G8B8A8_TYPELESS)
+    int64_t format;
+
+    /// \brief The image rectangle in the normalized (z=1) image space of the virtual cameras.
+    T5_Rectf vci;
+} T5_TextureInfo;
 
 /// \brief Camera Frame information to be retrieved with t5GetFilledCamImageBuffer()
 typedef struct {
@@ -382,12 +538,29 @@ typedef struct {
     /// \brief The image buffer being filled by the Tilt Five service.
     uint8_t* pixelData;
 
-    /// \brief The position of the camera relative to the GBD.
-    T5_Vec3 posCAM_GBD;
+    /// \brief The position of the camera relative to the STAGE.
+    T5_Vec3 posCAM_STAGE;
 
-    /// \brief The rotation of the camera relative to the GBD.
-    T5_Quat rotToCAM_GBD;
+    /// \brief The rotation of the camera relative to the STAGE.
+    T5_Quat rotToCAM_STAGE;
 } T5_CamImage;
+
+typedef struct {
+    /// \brief The position of the pixel in PIX space. This space is defined as the warped image
+    /// space that comes as camera frame returned by either the head tracking or tangible tracking
+    /// camera. +X, +Y point right and down, respectively, relative to the glasses.
+    T5_Vec2 pixelCoord_PIX;
+
+    /// \brief The dewarped position of the pixel in IMG space. This space is defined as the
+    /// dewarped imaged space at z=1 relative to the camera lens, a dewarped camera frame with
+    /// respect to either the head tracking or tangible tracking camera. +X, +Y point right and
+    /// down, respectively, relative to the glasses.
+    T5_Vec2 pixelCoord_IMG;
+
+    /// \brief The index of the camera the pixel coordinate came from. 0 for tangible tracking
+    /// camera, 1 for head tracking camera.
+    uint8_t cameraIndex;
+} T5_PixelDewarp;
 
 /// \brief Wand stream configuration
 typedef struct {
@@ -462,20 +635,20 @@ typedef struct {
         bool y;
     } buttons;
 
-    /// \brief WND/GBD rotation unit quaternion
-    //
-    /// The rotation unit quaternion that takes points from the GBD (gameboard)
+    /// \brief WND/STAGE rotation unit quaternion
+    ///
+    /// The rotation unit quaternion that takes points from the STAGE
     /// reference frame to the WND (wand) reference frame orientation.
-    T5_Quat rotToWND_GBD;
+    T5_Quat rotToWND_STAGE;
 
     /// \brief Position (Aim Point) - Vector3f
-    T5_Vec3 posAim_GBD;
+    T5_Vec3 posAim_STAGE;
 
     /// \brief Position (Fingertips) - Vector3f
-    T5_Vec3 posFingertips_GBD;
+    T5_Vec3 posFingertips_STAGE;
 
     /// \brief Position (Grip) - Vector3f
-    T5_Vec3 posGrip_GBD;
+    T5_Vec3 posGrip_STAGE;
 
     /// \brief Wand hand
     T5_Hand hand;

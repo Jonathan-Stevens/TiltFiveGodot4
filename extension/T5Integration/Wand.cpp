@@ -43,10 +43,10 @@ void Wand::update_from_stream_event(T5_WandStreamEvent& event) {
 
 			if (event.report.poseValid) {
 				_state |= WandState::POSE_VALID;
-				_pose.rotToWND_GBD = event.report.rotToWND_GBD;
-				_pose.posAim_GBD = event.report.posAim_GBD;
-				_pose.posFingertips_GBD = event.report.posFingertips_GBD;
-				_pose.posGrip_GBD = event.report.posGrip_GBD;
+				_pose.rotToWND_STAGE = event.report.rotToWND_STAGE;
+				_pose.posAim_STAGE = event.report.posAim_STAGE;
+				_pose.posFingertips_STAGE = event.report.posFingertips_STAGE;
+				_pose.posGrip_STAGE = event.report.posGrip_STAGE;
 			} else
 				_state &= ~WandState::POSE_VALID;
 			if (event.report.batteryValid) {

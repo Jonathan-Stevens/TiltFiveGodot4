@@ -11,13 +11,13 @@ using TaskSystem::task_sleep;
 namespace T5Integration {
 
 Glasses::SwapChainFrame::SwapChainFrame() {
-	glasses_pose.posGLS_GBD.x = 0;
-	glasses_pose.posGLS_GBD.y = 0;
-	glasses_pose.posGLS_GBD.z = 0;
-	glasses_pose.rotToGLS_GBD.x = 0;
-	glasses_pose.rotToGLS_GBD.y = 0;
-	glasses_pose.rotToGLS_GBD.z = 0;
-	glasses_pose.rotToGLS_GBD.w = 1;
+	glasses_pose.posGLS_STAGE.x = 0;
+	glasses_pose.posGLS_STAGE.y = 0;
+	glasses_pose.posGLS_STAGE.z = 0;
+	glasses_pose.rotToGLS_STAGE.x = 0;
+	glasses_pose.rotToGLS_STAGE.y = 0;
+	glasses_pose.rotToGLS_STAGE.z = 0;
+	glasses_pose.rotToGLS_STAGE.w = 1;
 	glasses_pose.gameboardType = kT5_GameboardType_None;
 	left_eye_handle = 0;
 	right_eye_handle = 0;
@@ -42,25 +42,25 @@ Glasses::~Glasses() {
 void Glasses::get_pose(T5_Vec3& out_position, T5_Quat& out_orientation) {
 	auto& pose = _swap_chain_frames[_current_frame_idx].glasses_pose;
 
-	out_position = pose.posGLS_GBD;
-	out_orientation = pose.rotToGLS_GBD;
+	out_position = pose.posGLS_STAGE;
+	out_orientation = pose.rotToGLS_STAGE;
 }
 
 void Glasses::get_glasses_position(float& out_pos_x, float& out_pos_y, float& out_pos_z) {
 	auto& pose = _swap_chain_frames[_current_frame_idx].glasses_pose;
 
-	out_pos_x = pose.posGLS_GBD.x;
-	out_pos_y = pose.posGLS_GBD.y;
-	out_pos_z = pose.posGLS_GBD.z;
+	out_pos_x = pose.posGLS_STAGE.x;
+	out_pos_y = pose.posGLS_STAGE.y;
+	out_pos_z = pose.posGLS_STAGE.z;
 }
 
 void Glasses::get_glasses_orientation(float& out_quat_x, float& out_quat_y, float& out_quat_z, float& out_quat_w) {
 	auto& pose = _swap_chain_frames[_current_frame_idx].glasses_pose;
 
-	out_quat_x = pose.rotToGLS_GBD.x;
-	out_quat_y = pose.rotToGLS_GBD.y;
-	out_quat_z = pose.rotToGLS_GBD.z;
-	out_quat_w = pose.rotToGLS_GBD.w;
+	out_quat_x = pose.rotToGLS_STAGE.x;
+	out_quat_y = pose.rotToGLS_STAGE.y;
+	out_quat_z = pose.rotToGLS_STAGE.z;
+	out_quat_w = pose.rotToGLS_STAGE.w;
 }
 
 bool Glasses::is_wand_state_set(int wand_num, uint8_t flags) {
@@ -84,9 +84,9 @@ bool Glasses::is_wand_pose_valid(int wand_num) {
 
 void Glasses::get_wand_position(int wand_num, float& out_pos_x, float& out_pos_y, float& out_pos_z) {
 	if (wand_num < _wand_list.size()) {
-		out_pos_x = _wand_list[wand_num]._pose.posAim_GBD.x;
-		out_pos_y = _wand_list[wand_num]._pose.posAim_GBD.y;
-		out_pos_z = _wand_list[wand_num]._pose.posAim_GBD.z;
+		out_pos_x = _wand_list[wand_num]._pose.posAim_STAGE.x;
+		out_pos_y = _wand_list[wand_num]._pose.posAim_STAGE.y;
+		out_pos_z = _wand_list[wand_num]._pose.posAim_STAGE.z;
 	} else {
 		out_pos_x = out_pos_y = out_pos_z = 0;
 	}
@@ -94,10 +94,10 @@ void Glasses::get_wand_position(int wand_num, float& out_pos_x, float& out_pos_y
 
 void Glasses::get_wand_orientation(int wand_num, float& out_quat_x, float& out_quat_y, float& out_quat_z, float& out_quat_w) {
 	if (wand_num < _wand_list.size()) {
-		out_quat_x = _wand_list[wand_num]._pose.rotToWND_GBD.x;
-		out_quat_y = _wand_list[wand_num]._pose.rotToWND_GBD.y;
-		out_quat_z = _wand_list[wand_num]._pose.rotToWND_GBD.z;
-		out_quat_w = _wand_list[wand_num]._pose.rotToWND_GBD.w;
+		out_quat_x = _wand_list[wand_num]._pose.rotToWND_STAGE.x;
+		out_quat_y = _wand_list[wand_num]._pose.rotToWND_STAGE.y;
+		out_quat_z = _wand_list[wand_num]._pose.rotToWND_STAGE.z;
+		out_quat_w = _wand_list[wand_num]._pose.rotToWND_STAGE.w;
 	} else {
 		out_quat_x = out_quat_y = out_quat_z = 0;
 		out_quat_w = 1;
@@ -497,18 +497,18 @@ void Glasses::get_eye_position(Eye eye, T5_Vec3& pos) {
 	auto& pose = _swap_chain_frames[_current_frame_idx].glasses_pose;
 
 	_math->rotate_vector(
-			pose.rotToGLS_GBD.x,
-			pose.rotToGLS_GBD.y,
-			pose.rotToGLS_GBD.z,
-			pose.rotToGLS_GBD.w,
+			pose.rotToGLS_STAGE.x,
+			pose.rotToGLS_STAGE.y,
+			pose.rotToGLS_STAGE.z,
+			pose.rotToGLS_STAGE.w,
 			pos.x,
 			pos.y,
 			pos.z,
 			true);
 
-	pos.x += pose.posGLS_GBD.x;
-	pos.y += pose.posGLS_GBD.y;
-	pos.z += pose.posGLS_GBD.z;
+	pos.x += pose.posGLS_STAGE.x;
+	pos.y += pose.posGLS_STAGE.y;
+	pos.z += pose.posGLS_STAGE.z;
 }
 
 void Glasses::send_frame() {
@@ -534,11 +534,11 @@ void Glasses::send_frame() {
 
 		auto& pose = _swap_chain_frames[_current_frame_idx].glasses_pose;
 
-		get_eye_position(Left, frameInfo.posLVC_GBD);
-		frameInfo.rotToLVC_GBD = pose.rotToGLS_GBD;
+		get_eye_position(Left, frameInfo.posLVC_STAGE);
+		frameInfo.rotToLVC_STAGE = pose.rotToGLS_STAGE;
 
-		get_eye_position(Right, frameInfo.posRVC_GBD);
-		frameInfo.rotToRVC_GBD = pose.rotToGLS_GBD;
+		get_eye_position(Right, frameInfo.posRVC_STAGE);
+		frameInfo.rotToRVC_STAGE = pose.rotToGLS_STAGE;
 
 		frameInfo.isUpsideDown = _is_upside_down_texture;
 		frameInfo.isSrgb = true;

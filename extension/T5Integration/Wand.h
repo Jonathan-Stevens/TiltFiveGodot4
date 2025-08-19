@@ -35,10 +35,10 @@ struct WandAnalog {
 };
 
 struct WandPose {
-	T5_Quat rotToWND_GBD;
-	T5_Vec3 posAim_GBD;
-	T5_Vec3 posFingertips_GBD;
-	T5_Vec3 posGrip_GBD;
+	T5_Quat rotToWND_STAGE;
+	T5_Vec3 posAim_STAGE;
+	T5_Vec3 posFingertips_STAGE;
+	T5_Vec3 posGrip_STAGE;
 };
 
 struct Wand {
