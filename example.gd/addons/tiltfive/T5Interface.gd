@@ -64,6 +64,7 @@ func _ready():
 func _start_display(glasses_id : StringName, xr_rig : T5XRRig):
 	tilt_five_xr_interface.start_display(glasses_id, xr_rig, xr_rig.get_origin())
 	xr_rig.get_camera().tracker = "/user/%s/head" % glasses_id
+	xr_rig.get_gameboard_pose().tracker = "/user/%s/gameboard_1" % glasses_id
 	xr_rig.get_wand().tracker = "/user/%s/wand_1" % glasses_id
 
 func _process_glasses():

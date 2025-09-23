@@ -1,7 +1,6 @@
 #include <GodotT5Glasses.h>
 #include <ObjectRegistry.h>
 #include <Wand.h>
-#include <godot_cpp/classes/container.hpp>
 #include <godot_cpp/classes/xr_server.hpp>
 #include <godot_cpp/core/error_macros.hpp>
 #include <godot_cpp/variant/variant.hpp>
@@ -76,6 +75,28 @@ Transform3D GodotT5Glasses::get_wand_transform(int wand_num) {
 	return wandPose;
 }
 
+Transform3D GodotT5Glasses::get_gameboard_transform(int gameboard_num) {
+	auto pose = get_gameboard_pose(gameboard_num);
+
+	// Tiltfive -> Godot axis
+	Vector3 position(
+		static_cast<real_t>(pose.posBOARD_STAGE.x),
+		static_cast<real_t>(pose.posBOARD_STAGE.z),
+		static_cast<real_t>(-pose.posBOARD_STAGE.y));
+	Quaternion orientation(
+		static_cast<real_t>(pose.rotToBOARD_STAGE.x),
+		static_cast<real_t>(pose.rotToBOARD_STAGE.z),
+		static_cast<real_t>(-pose.rotToBOARD_STAGE.y),
+		static_cast<real_t>(pose.rotToBOARD_STAGE.w));
+	orientation = orientation.inverse();
+
+	Transform3D gameboardPose;
+	gameboardPose.set_origin(position);
+	gameboardPose.set_basis(orientation);
+
+	return gameboardPose;
+}
+
 PackedFloat64Array GodotT5Glasses::get_projection_for_eye(Glasses::Eye view, double aspect, double z_near, double z_far) {
 	PackedFloat64Array arr;
 	arr.resize(16); // 4x4 matrix
@@ -112,6 +133,9 @@ void GodotT5Glasses::on_glasses_released() {
 		ERR_FAIL_NULL(xr_server);
 
 		xr_server->remove_tracker(_head);
+		for (auto _gameboard_tracker : _gameboard_trackers) {
+			xr_server->remove_tracker(_gameboard_tracker);
+		}
 	}
 }
 
@@ -121,6 +145,9 @@ void GodotT5Glasses::on_glasses_dropped() {
 		ERR_FAIL_NULL(xr_server);
 
 		xr_server->remove_tracker(_head);
+		for (auto _gameboard_tracker : _gameboard_trackers) {
+			xr_server->remove_tracker(_gameboard_tracker);
+		}
 	}
 }
 
@@ -143,6 +170,14 @@ void GodotT5Glasses::on_tracking_updated() {
 		if (wand_idx == _wand_trackers.size())
 			add_tracker();
 		update_wand(wand_idx);
+	}
+
+	auto num_gameboards = get_num_gameboards();
+	for (int gameboard_idx = 0; gameboard_idx < num_gameboards; ++gameboard_idx) {
+		if (gameboard_idx == _gameboard_trackers.size()) {
+			add_gameboard_tracker();
+		}
+		update_gameboard(gameboard_idx);
 	}
 }
 
@@ -222,6 +257,51 @@ void GodotT5Glasses::update_wand(int wand_idx) {
 		tracker->set_input("button_3", Variant(buttons.three));
 		tracker->set_input("button_t5", Variant(buttons.t5));
 	}
+}
+
+void GodotT5Glasses::add_gameboard_tracker() {
+	int new_idx = _gameboard_trackers.size();
+	int new_id = new_idx + 1;
+
+	Ref<XRPositionalTracker> positional_tracker;
+	positional_tracker.instantiate();
+
+	char buffer[64];
+	ERR_FAIL_COND(snprintf(buffer, 64, "/user/%s/gameboard_%d", get_id().c_str(), new_id) > 64);
+	LOG_WARNING(buffer);
+
+	positional_tracker->set_tracker_type(XRServer::TRACKER_ANCHOR);	// TODO: JSTEVENS@T5 - Is this the correct type?
+	positional_tracker->set_tracker_name(buffer);
+	positional_tracker->set_tracker_desc("Tracks gameboard");
+
+	_gameboard_trackers.push_back(positional_tracker);
+	auto xr_server = XRServer::get_singleton();
+	xr_server->add_tracker(positional_tracker);
+}
+
+void GodotT5Glasses::update_gameboard(int gameboard_idx) {
+	auto xr_server = XRServer::get_singleton();
+
+	auto tracker = _gameboard_trackers[gameboard_idx];
+
+	// We're going to loosely mimic what update_wand() is doing above.
+	if (gameboard_idx >= get_num_gameboards()) {
+		tracker->invalidate_pose("default");
+		return;
+	}
+
+	// Get the gameboard pose for this index
+	auto pose = get_gameboard_pose(gameboard_idx);
+
+	// Check whether the gameboard type is invalid
+	if (pose.gameboardType == T5_GameboardType::kT5_GameboardType_None) {
+		tracker->invalidate_pose("default");
+		return;
+	}
+
+	// Set the tracker pose information
+	auto gameboard_transform = get_gameboard_transform(gameboard_idx);
+	tracker->set_pose("default", gameboard_transform, Vector3(), Vector3(), godot::XRPose::XR_TRACKING_CONFIDENCE_HIGH);
 }
 
 bool GodotT5Glasses::get_tracker_association(StringName tracker_name, int &out_wand_idx) {

@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://cnjvy4x25r3ae"
-path="res://.godot/imported/T5_border_XE_raised.glb-b835c3500317b519c096a0e5b7317a31.scn"
+uid="uid://ce6xru2kt68sw"
+path="res://.godot/imported/T5_stage_border_XE.glb-b00b02f44db275204f259a00c476ffb5.scn"
 
 [deps]
 
-source_file="res://addons/tiltfive/assets/T5_border_XE_raised.glb"
-dest_files=["res://.godot/imported/T5_border_XE_raised.glb-b835c3500317b519c096a0e5b7317a31.scn"]
+source_file="res://addons/tiltfive/assets/T5_stage_border_XE.glb"
+dest_files=["res://.godot/imported/T5_stage_border_XE.glb-b00b02f44db275204f259a00c476ffb5.scn"]
 
 [params]
 
@@ -34,11 +34,11 @@ animation/import_rest_as_RESET=false
 import_script/path=""
 _subresources={
 "materials": {
-"Border Material": {
+"Stage_XE_Material": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/tiltfive/assets/materials/T5BorderMat.tres"
+"use_external/path": "res://addons/tiltfive/assets/materials/T5StageMat_XE.tres"
 }
 }
 }
-gltf/naming_version=0
+gltf/naming_version=1
 gltf/embedded_image_handling=0

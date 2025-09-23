@@ -44,6 +44,7 @@ public:
 	virtual PackedFloat64Array get_projection_for_eye(Glasses::Eye view, double aspect, double z_near, double z_far);
 
 	virtual Transform3D get_wand_transform(int wand_num);
+	virtual Transform3D get_gameboard_transform(int gameboard_num);
 
 	virtual RID get_color_texture() = 0;
 
@@ -64,10 +65,15 @@ private:
 	void add_tracker();
 	void update_wand(int wand_idx);
 
+	void add_gameboard_tracker();
+	void update_gameboard(int gameboard_idx);
+
 	Ref<XRPositionalTracker> _head;
 	std::vector<Ref<XRPositionalTracker>> _wand_trackers;
+	std::vector<Ref<XRPositionalTracker>> _gameboard_trackers;
 
 	float _trigger_click_threshold;
+	static const int NUM_SUPPORTED_GAMEBOARDS = 1;
 };
 
 inline bool GodotT5Glasses::is_reserved() {

@@ -63,6 +63,13 @@ void Glasses::get_glasses_orientation(float& out_quat_x, float& out_quat_y, floa
 	out_quat_w = pose.rotToGLS_STAGE.w;
 }
 
+T5_GameboardPose Glasses::get_gameboard_pose(int gameboard_idx) {
+	if (gameboard_idx < _gameboard_list.size()) {
+		return _gameboard_list[gameboard_idx];
+	}
+	return T5_GameboardPose();
+}
+
 bool Glasses::is_wand_state_set(int wand_num, uint8_t flags) {
 	return wand_num < _wand_list.size() && (_wand_list[wand_num]._state & flags) == flags;
 }
@@ -130,6 +137,26 @@ void Glasses::trigger_haptic_pulse(int wand_num, float amplitude, uint16_t durat
 	if (wand_num < _wand_list.size() && _state.is_current(GlassesState::CONNECTED)) {
 		std::lock_guard lock(g_t5_exclusivity_group_1);
 		t5SendImpulse(_glasses_handle, _wand_list[wand_num]._handle, amplitude, duration);
+	}
+}
+
+void Glasses::update_gameboard_tracking() {	
+	// gameboard_pose_count needs to be initialized to the max number of gameboard poses we're willing to receive.
+	// Calling t5GetGameboardPoses will change it to the number of gameboard poses we actually received.
+	uint16_t gameboard_pose_count = MAX_SUPPORTED_GAMEBOARDS;
+	T5_GameboardPose obtained_gameboard_poses[MAX_SUPPORTED_GAMEBOARDS];
+
+	auto result = t5GetGameboardPoses(_glasses_handle, &obtained_gameboard_poses[0], &gameboard_pose_count);
+	if (result == T5_ERROR_TRY_AGAIN) {
+		// When we see this error, we are not tracking the primary gameboard, and consequently can't track other gameboards.
+		// This can commonly happen if the user looks away.
+		_gameboard_list.clear();
+	}
+	else if (result == T5_SUCCESS) {
+		_gameboard_list.clear();
+		for (int i = 0; i < gameboard_pose_count; ++i) {
+			_gameboard_list.push_back(obtained_gameboard_poses[i]);
+		}
 	}
 }
 
@@ -262,8 +289,9 @@ CotaskPtr Glasses::monitor_connection() {
 		}
 
 		if (_state.any_changed(_previous_monitor_state, GlassesState::READY | GlassesState::GRAPHICS_INIT)) {
-			if (_state.is_current(GlassesState::READY | GlassesState::GRAPHICS_INIT))
+			if (_state.is_current(GlassesState::READY | GlassesState::GRAPHICS_INIT)) {
 				_state.set(GlassesState::CONNECTED);
+			}
 			else
 				_state.clear(GlassesState::CONNECTED);
 		}
@@ -578,6 +606,7 @@ bool Glasses::update_connection() {
 
 bool Glasses::update_tracking() {
 	update_pose();
+	update_gameboard_tracking();
 	on_tracking_updated();
 	return true;
 }
