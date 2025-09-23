@@ -14,3 +14,5 @@ cull_mask = 5
 far = 25.0
 
 [node name="Wand_1" type="T5Controller3D" parent="Origin"]
+
+[node name="GameboardPose" type="T5Node3D" parent="Origin"]

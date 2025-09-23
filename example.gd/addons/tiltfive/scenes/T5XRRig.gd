@@ -5,6 +5,7 @@ var _glasses_id : StringName
 var _gameboard_type := T5Def.GameboardType.Unknown
 var _gameboard_size := AABB()
 var _origin : T5Origin3D
+var _gameboard_pose : T5Node3D
 var _camera : T5Camera3D
 var _wand : T5Controller3D
 
@@ -24,9 +25,13 @@ func get_gameboard_type() -> T5Def.GameboardType:
 func get_gameboard_size() -> AABB:
 	return _gameboard_size
 
-## the node that relates the center of the gameboard to world coordinates
+## the node that relates the center of the stage to world coordinates
 func get_origin() -> T5Origin3D:
 	return _origin
+
+## The node that relates the gameboard to the stage
+func get_gameboard_pose() -> T5Node3D:
+	return _gameboard_pose
 
 ## the tracked camera
 func get_camera() -> T5Camera3D:
@@ -38,6 +43,7 @@ func get_wand() -> T5Controller3D:
 
 func _enter_tree():
 	_origin = $Origin
+	_gameboard_pose = $Origin/GameboardPose
 	_camera = $Origin/Camera
 	_wand = $Origin/Wand_1
 

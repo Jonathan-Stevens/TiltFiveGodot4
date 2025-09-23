@@ -63,6 +63,13 @@ void Glasses::get_glasses_orientation(float& out_quat_x, float& out_quat_y, floa
 	out_quat_w = pose.rotToGLS_STAGE.w;
 }
 
+T5_GameboardPose Glasses::get_gameboard_pose(int gameboard_idx) {
+	if (gameboard_idx < _gameboard_list.size()) {
+		return _gameboard_list[gameboard_idx];
+	}
+	return T5_GameboardPose();
+}
+
 bool Glasses::is_wand_state_set(int wand_num, uint8_t flags) {
 	return wand_num < _wand_list.size() && (_wand_list[wand_num]._state & flags) == flags;
 }
@@ -262,8 +269,10 @@ CotaskPtr Glasses::monitor_connection() {
 		}
 
 		if (_state.any_changed(_previous_monitor_state, GlassesState::READY | GlassesState::GRAPHICS_INIT)) {
-			if (_state.is_current(GlassesState::READY | GlassesState::GRAPHICS_INIT))
+			if (_state.is_current(GlassesState::READY | GlassesState::GRAPHICS_INIT)) {
 				_state.set(GlassesState::CONNECTED);
+				_scheduler->add_task(monitor_gameboards());
+			}
 			else
 				_state.clear(GlassesState::CONNECTED);
 		}
@@ -316,6 +325,40 @@ CotaskPtr Glasses::monitor_parameters() {
 					break;
 			}
 		}
+	}
+}
+
+CotaskPtr Glasses::monitor_gameboards() {
+	GameboardService gameboard_service;
+
+	if (!gameboard_service.start(_glasses_handle)) {
+		co_return;
+	}
+
+	co_await run_in_foreground;
+
+	if (!gameboard_service.is_running()) {
+		_state.clear(GlassesState::TRACKING_GAMEBOARDS);
+	}
+
+	while (_glasses_handle && _state.is_current(GlassesState::SUSTAIN_CONNECTION) && gameboard_service.is_running()) {
+		auto err = gameboard_service.get_last_error();
+		if (err != T5_SUCCESS) {
+			LOG_T5_ERROR(err);
+		}
+
+		gameboard_service.get_gameboard_data(_gameboard_list);
+		while (_gameboard_list.size() > _previous_gameboard_state.size()) {
+			_previous_gameboard_state.push_back(0);
+		}
+		co_await run_in_foreground;
+	}
+
+	gameboard_service.stop();
+	_state.clear(GlassesState::TRACKING_GAMEBOARDS);
+	auto err = gameboard_service.get_last_error();
+	if (err != T5_SUCCESS) {
+		LOG_T5_ERROR(gameboard_service.get_last_error());	// JSTEVENS@T5: Not `err`? Do we need to check again?
 	}
 }
 
@@ -471,8 +514,10 @@ void Glasses::update_pose() {
 
 	if (isTracking) {
 		_state.set(GlassesState::TRACKING);
+		_state.set(GlassesState::TRACKING_GAMEBOARDS);
 	} else {
 		_state.clear(GlassesState::TRACKING);
+		_state.clear(GlassesState::TRACKING_GAMEBOARDS);
 
 		if (result == T5_ERROR_TRY_AGAIN)
 			return;

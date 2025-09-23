@@ -3,6 +3,7 @@
 #include <StateFlags.h>
 #include <T5Math.h>
 #include <TaskSystem.h>
+#include <Gameboard.h>
 #include <Wand.h>
 #include <optional>
 
@@ -18,17 +19,18 @@ float const g_default_fov = 48.0f;
 
 // clang-format off
 namespace GlassesState {
-	const uint16_t READY				= 0x00000001; //0000000001
-	const uint16_t GRAPHICS_INIT		= 0x00000002; //0000000010
-	const uint16_t SUSTAIN_CONNECTION	= 0x00000004; //0000000100
+	const uint16_t READY				= 0x00000001; //00000000001
+	const uint16_t GRAPHICS_INIT		= 0x00000002; //00000000010
+	const uint16_t SUSTAIN_CONNECTION	= 0x00000004; //00000000100
 
-	const uint16_t CREATED				= 0x00000008; //0000001000
-	const uint16_t UNAVAILABLE			= 0x00000010; //0000010000
-	const uint16_t TRACKING				= 0x00000020; //0000100000
-	const uint16_t CONNECTED			= 0x00000040; //0001000000
-	const uint16_t TRACKING_WANDS		= 0x00000080; //0010000000
-	const uint16_t ERROR				= 0x00000100; //0100000000
-	const uint16_t DISPLAY_STARTED		= 0x00000200; //1000000000
+	const uint16_t CREATED				= 0x00000008; //00000001000
+	const uint16_t UNAVAILABLE			= 0x00000010; //00000010000
+	const uint16_t TRACKING				= 0x00000020; //00000100000
+	const uint16_t CONNECTED			= 0x00000040; //00001000000
+	const uint16_t TRACKING_WANDS		= 0x00000080; //00010000000
+	const uint16_t ERROR				= 0x00000100; //00100000000
+	const uint16_t DISPLAY_STARTED		= 0x00000200; //01000000000
+	const uint16_t TRACKING_GAMEBOARDS	= 0x00000400; //10000000000
 }
 // clang-format on
 
@@ -113,6 +115,7 @@ public:
 	T5_GameboardType get_gameboard_type();
 
 	int get_num_wands() { return _wand_list.size(); }
+	int get_num_gameboards() { return _gameboard_list.size(); }
 
 	bool is_wand_state_set(int wand_num, uint8_t flags);
 	bool is_wand_state_changed(int wand_num, uint8_t flags);
@@ -142,9 +145,12 @@ protected:
 
 	GlassesFlags::FlagType get_current_state();
 
+	T5_GameboardPose get_gameboard_pose(int idx);
+
 private:
 	CotaskPtr monitor_connection();
 	CotaskPtr monitor_parameters();
+	CotaskPtr monitor_gameboards();
 	CotaskPtr monitor_wands();
 	CotaskPtr query_ipd();
 	CotaskPtr query_friendly_name();
@@ -181,6 +187,9 @@ private:
 	GlassesFlags _previous_update_state;
 
 	bool _is_upside_down_texture = false;
+
+	GameboardList _gameboard_list;
+	std::vector<uint8_t> _previous_gameboard_state;	// JSTEVENS@T5: This plain uint8_t feels kind of opaque...
 
 	WandList _wand_list;
 	std::vector<uint8_t> _previous_wand_state;
