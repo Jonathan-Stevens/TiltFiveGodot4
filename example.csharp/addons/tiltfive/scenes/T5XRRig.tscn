@@ -16,3 +16,6 @@ script = ExtResource("3_iaov5")
 
 [node name="Wand_1" type="T5Controller3D" parent="Origin"]
 script = ExtResource("3_olh3w")
+
+[node name="Wand_2" type="T5Controller3D" parent="Origin"]
+script = ExtResource("3_olh3w")

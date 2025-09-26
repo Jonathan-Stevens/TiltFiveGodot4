@@ -6,7 +6,8 @@ var _gameboard_type := T5Def.GameboardType.Unknown
 var _gameboard_size := AABB()
 var _origin : T5Origin3D
 var _camera : T5Camera3D
-var _wand : T5Controller3D
+var _left_wand : T5Controller3D
+var _right_wand : T5Controller3D
 
 ## Get the ID attached to a pair of Tilt Five glasses
 func get_glasses_id() -> StringName:
@@ -32,14 +33,24 @@ func get_origin() -> T5Origin3D:
 func get_camera() -> T5Camera3D:
 	return _camera
 
-## the tracked wand controller
+## The tracked wand controller
 func get_wand() -> T5Controller3D:
-	return _wand
+	return _right_wand
+
+# The tracked wand controller associated with the user's right hand
+func get_right_wand() -> T5Controller3D:
+	return _right_wand
+
+# The tracked wand controller associated with the user's left hand
+func get_left_wand() -> T5Controller3D:
+	return _left_wand
 
 func _enter_tree():
 	_origin = $Origin
 	_camera = $Origin/Camera
-	_wand = $Origin/Wand_1
+	_right_wand = $Origin/Wand_1
+	_left_wand = $Origin/Wand_2
 
 func _process(_delta):
-	if _wand: _wand.visible = _wand.get_has_tracking_data()
+	if _right_wand: _right_wand.visible = _right_wand.get_has_tracking_data()
+	if _left_wand: _left_wand.visible = _left_wand.get_has_tracking_data()
